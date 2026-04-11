@@ -50,7 +50,7 @@ with st.container():
     st.subheader("1. Konfigurasi Awal")
     col_input1, col_input2 = st.columns([2, 1])
     with col_input1:
-        plaintext = st.text_input("Masukkan Plaintext:", value="Contoh: secret, kunci, dll.")
+        plaintext = st.text_input("Masukkan Plaintext:", placeholder="Contoh: secret, kunci, dll.")
     with col_input2:
         shift_val = st.number_input("Shift Caesar:", min_value=0, max_value=25, value=5)
 
