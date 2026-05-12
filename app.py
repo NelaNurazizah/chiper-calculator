@@ -5,7 +5,7 @@ import pandas as pd
 st.set_page_config(page_title="Kalkulator Kripto Edukatif", layout="wide")
 
 st.title("🔐 Kalkulator Kriptografi Klasik")
-st.markdown("Alat bantu belajar proses enkripsi dan dekripsi algoritma klasik.")
+st.markdown("Alat bantu belajar proses enkripsi dan dekripsi algoritma klasik untuk persiapan ujian.")
 
 # --- FUNGSI HELPER & ALGORITMA ---
 
@@ -67,29 +67,58 @@ def affine_cipher(text, a, b, mode='Enkripsi'):
             result += char
     return result, steps
 
-def hill_cipher_2x2(text, matrix, mode='Enkripsi'):
+# Fungsi pembantu untuk invers Hill Cipher 2x2
+def invert_matrix_2x2_mod26(K):
+    det = (K[0][0]*K[1][1] - K[0][1]*K[1][0]) % 26
+    try: det_inv = pow(det, -1, 26)
+    except ValueError: return None
+    return [
+        [(K[1][1]*det_inv)%26, (-K[0][1]*det_inv)%26],
+        [(-K[1][0]*det_inv)%26, (K[0][0]*det_inv)%26]
+    ]
+
+# Fungsi pembantu untuk invers Hill Cipher 3x3
+def invert_matrix_3x3_mod26(M):
+    det = (M[0][0]*(M[1][1]*M[2][2] - M[1][2]*M[2][1]) -
+           M[0][1]*(M[1][0]*M[2][2] - M[1][2]*M[2][0]) +
+           M[0][2]*(M[1][0]*M[2][1] - M[1][1]*M[2][0])) % 26
+    try: det_inv = pow(det, -1, 26)
+    except ValueError: return None
+    # Menghitung matriks adjoin mod 26
+    adj = [
+        [(M[1][1]*M[2][2] - M[1][2]*M[2][1]) % 26, -(M[0][1]*M[2][2] - M[0][2]*M[2][1]) % 26, (M[0][1]*M[1][2] - M[0][2]*M[1][1]) % 26],
+        [-(M[1][0]*M[2][2] - M[1][2]*M[2][0]) % 26, (M[0][0]*M[2][2] - M[0][2]*M[2][0]) % 26, -(M[0][0]*M[1][2] - M[0][2]*M[1][0]) % 26],
+        [(M[1][0]*M[2][1] - M[1][1]*M[2][0]) % 26, -(M[0][0]*M[2][1] - M[0][1]*M[2][0]) % 26, (M[0][0]*M[1][1] - M[0][1]*M[1][0]) % 26]
+    ]
+    return [[(adj[i][j] * det_inv) % 26 for j in range(3)] for i in range(3)]
+
+def hill_cipher(text, matrix, mode='Enkripsi'):
+    n = len(matrix)
     steps = []
     text = "".join([c for c in text.upper() if c.isalpha()])
-    if len(text) % 2 != 0: text += 'X'
+    while len(text) % n != 0: text += 'X' # Padding
     
-    k11, k12, k21, k22 = matrix
+    working_matrix = matrix
     if mode == 'Dekripsi':
-        det = (k11 * k22 - k12 * k21) % 26
-        try:
-            det_inv = pow(det, -1, 26)
-            k11, k12, k21, k22 = (k22*det_inv)%26, (-k12*det_inv)%26, (-k21*det_inv)%26, (k11*det_inv)%26
-            steps.append(f"Matriks Invers Modulo 26 ditemukan.")
-        except ValueError:
-            return None, ["Error: Matriks tidak memiliki invers (Determinan 0 atau genap)."]
+        if n == 2: working_matrix = invert_matrix_2x2_mod26(matrix)
+        elif n == 3: working_matrix = invert_matrix_3x3_mod26(matrix)
+        
+        if working_matrix is None:
+            return None, ["Error: Matriks tidak memiliki invers modulo 26 (Determinan 0 atau genap)."]
+        steps.append(f"Matriks Invers (Mod 26) ditemukan:")
+        steps.append(pd.DataFrame(working_matrix))
 
     result = ""
-    for i in range(0, len(text), 2):
-        p1, p2 = ord(text[i]) - 65, ord(text[i+1]) - 65
-        c1 = (k11 * p1 + k12 * p2) % 26
-        c2 = (k21 * p1 + k22 * p2) % 26
-        res_pair = chr(c1 + 65) + chr(c2 + 65)
-        steps.append(f"Blok [{text[i]},{text[i+1]}] → [{p1},{p2}] × Matriks → [{c1},{c2}] → '{res_pair}'")
-        result += res_pair
+    for i in range(0, len(text), n):
+        block = [ord(c)-65 for c in text[i:i+n]]
+        res_block = []
+        for r in range(n):
+            val = sum(working_matrix[r][c] * block[c] for c in range(n)) % 26
+            res_block.append(val)
+        
+        res_chars = "".join([chr(val+65) for val in res_block])
+        steps.append(f"Blok {list(text[i:i+n])} → {block} × Matriks → {res_block} → '{res_chars}'")
+        result += res_chars
     return result, steps
 
 def playfair_cipher(text, key, mode='Enkripsi'):
@@ -134,10 +163,10 @@ def playfair_cipher(text, key, mode='Enkripsi'):
 # --- SIDEBAR & INPUT ---
 with st.sidebar:
     st.header("Pengaturan")
-    algo = st.selectbox("Pilih Algoritma", ["Caesar", "Vigenère", "Affine", "Hill (2x2)", "Playfair"])
+    algo = st.selectbox("Pilih Algoritma", ["Caesar", "Vigenère", "Affine", "Hill Cipher", "Playfair"])
     mode = st.radio("Mode", ["Enkripsi", "Dekripsi"])
 
-input_text = st.text_area("Input Teks", "HELLO WORLD")
+input_text = st.text_area("Input Teks", "SERANG SEKARANG")
 
 # --- DINAMIS INPUT SESUAI ALGORITMA ---
 res_text, res_steps = "", []
@@ -154,20 +183,37 @@ elif algo == "Vigenère":
 
 elif algo == "Affine":
     col1, col2 = st.columns(2)
-    a = col1.number_input("Nilai a (harus ganjil & bukan 13)", value=5)
+    a = col1.number_input("Nilai a (harus ganjil & koprima dgn 26)", value=5)
     b = col2.number_input("Nilai b", value=8)
     if st.button("Proses"):
         res_text, res_steps = affine_cipher(input_text, a, b, mode)
 
-elif algo == "Hill (2x2)":
-    st.write("Matriks Kunci:")
-    c1, c2 = st.columns(2)
-    k11 = c1.number_input("K[0,0]", value=3)
-    k12 = c2.number_input("K[0,1]", value=3)
-    k21 = c1.number_input("K[1,0]", value=2)
-    k22 = c2.number_input("K[1,1]", value=5)
+elif algo == "Hill Cipher":
+    size = st.radio("Ukuran Matriks", ["2x2", "3x3"])
+    st.write("Masukkan Elemen Matriks Kunci:")
+    
+    if size == "2x2":
+        c1, c2 = st.columns(2)
+        k11 = c1.number_input("K[0,0]", value=3, key="k11_2")
+        k12 = c2.number_input("K[0,1]", value=3, key="k12_2")
+        k21 = c1.number_input("K[1,0]", value=2, key="k21_2")
+        k22 = c2.number_input("K[1,1]", value=5, key="k22_2")
+        matrix = [[k11, k12], [k21, k22]]
+    else:
+        c1, c2, c3 = st.columns(3)
+        k11 = c1.number_input("K[0,0]", value=6, key="k11_3")
+        k12 = c2.number_input("K[0,1]", value=24, key="k12_3")
+        k13 = c3.number_input("K[0,2]", value=1, key="k13_3")
+        k21 = c1.number_input("K[1,0]", value=13, key="k21_3")
+        k22 = c2.number_input("K[1,1]", value=16, key="k22_3")
+        k23 = c3.number_input("K[1,2]", value=10, key="k23_3")
+        k31 = c1.number_input("K[2,0]", value=20, key="k31_3")
+        k32 = c2.number_input("K[2,1]", value=17, key="k32_3")
+        k33 = c3.number_input("K[2,2]", value=15, key="k33_3")
+        matrix = [[k11, k12, k13], [k21, k22, k23], [k31, k32, k33]]
+        
     if st.button("Proses"):
-        res_text, res_steps = hill_cipher_2x2(input_text, [k11, k12, k21, k22], mode)
+        res_text, res_steps = hill_cipher(input_text, matrix, mode)
 
 elif algo == "Playfair":
     key = st.text_input("Kata Kunci", "MONARCHY")
@@ -182,6 +228,8 @@ if res_text:
     with st.expander("Lihat Langkah Perhitungan (Edukatif)"):
         for step in res_steps:
             if isinstance(step, pd.DataFrame):
-                st.table(step)
+                st.dataframe(step, use_container_width=True)
             else:
                 st.write(step)
+elif res_text is None:
+    st.error(res_steps[0])
